@@ -8,6 +8,38 @@ import yaml
 from utils.utils import *
 import sys
 import os
+import re
+from dotenv import load_dotenv
+
+
+def resolve_env_variables(config):
+    """
+    遞迴解析配置中的環境變數。
+    支援格式: %env:VARIABLE_NAME% 或 ${VARIABLE_NAME}
+    """
+    if isinstance(config, dict):
+        return {key: resolve_env_variables(value) for key, value in config.items()}
+    elif isinstance(config, list):
+        return [resolve_env_variables(item) for item in config]
+    elif isinstance(config, str):
+        # 解析 %env:VAR_NAME% 格式
+        pattern1 = r'%env:([^%]+)%'
+        # 解析 ${VAR_NAME} 格式
+        pattern2 = r'\$\{([^}]+)\}'
+        
+        def replace_env(match):
+            var_name = match.group(1)
+            env_value = os.environ.get(var_name)
+            if env_value is None:
+                print(f"[WARNING] Environment variable '{var_name}' not found, using original value")
+                return match.group(0)
+            return env_value
+        
+        # 先處理 %env:VAR% 格式
+        config = re.sub(pattern1, replace_env, config)
+        # 再處理 ${VAR} 格式
+        config = re.sub(pattern2, replace_env, config)
+    return config
 
 
 class LAMBDA:
@@ -19,10 +51,25 @@ class LAMBDA:
             bundle_dir = os.path.dirname(sys.executable)
         else:
             bundle_dir = os.path.dirname(os.path.abspath(__file__))
+        
+        # 從 .env 檔案載入環境變數
+        env_path = os.path.join(bundle_dir, '.env')
+        if os.path.exists(env_path):
+            load_dotenv(env_path)
+            print(f"[INFO] Loaded environment variables from {env_path}")
+        else:
+            # 嘗試從當前目錄載入
+            load_dotenv()
+            print("[INFO] Attempting to load .env from current directory")
+        
         config_path = os.path.join(bundle_dir, config_path)
 
         with open(config_path, 'r') as f:
             self.config = yaml.load(f, Loader=yaml.FullLoader)
+        
+        # 解析配置中的環境變數
+        self.config = resolve_env_variables(self.config)
+        
         if self.config["load_chat"] == True:
             self.load_dialogue(self.config["chat_history_path"])
         else:

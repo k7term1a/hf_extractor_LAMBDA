@@ -8,6 +8,7 @@ from prompt_engineering.prompts import PMT_KNW_IN_CORE, PMT_KNW_IN_FULL
 from knowledge_integration.ncm import Nearest_Correlation_Matrix
 from knowledge_integration.nn_network import nn_networks
 from knowledge_integration.pami import pattern_mining
+from knowledge_integration.hf_dataset_analyzer import HuggingFaceDatasetAnalyzer
 from kernel import execute
 
 
@@ -23,6 +24,9 @@ def knowledge_register():
     pami = pattern_mining()
     pami_key = pami.name+pami.description
     KNW_INJECTION[pami_key] = pami
+    hf_analyzer = HuggingFaceDatasetAnalyzer()
+    hf_key = hf_analyzer.name+hf_analyzer.description
+    KNW_INJECTION[hf_key] = hf_analyzer
 
 embeding_model = SentenceTransformer('all-MiniLM-L6-v2')
 

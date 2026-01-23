@@ -97,7 +97,7 @@ def launch_app():
             )
 
     demo.launch(server_name="0.0.0.0", server_port=8000, allowed_paths=[to_absolute_path(Lambda.config["project_cache_path"])],
-                share=True, inbrowser=True)
+                share=False, inbrowser=True)
 
 
 if __name__ == '__main__':
