@@ -1,23 +1,22 @@
 #================================================================================================
 #                                       Config of the LLMs
 #================================================================================================
-conv_model : "gpt-5-mini" # the conversation model
-programmer_model : "gpt-4.1-mini" # the programming model
-inspector_model : "gpt-4.1-mini" # the inspector model
-api_key : ""               # Set your API Key here.
-base_url_conv_model : 'https://api.openai.com/v1'
-base_url_programmer : 'https://api.openai.com/v1'
-base_url_inspector : 'https://api.openai.com/v1'
-
+conv_model: "Llama-3.1-70B" # the conversation model
+programmer_model: "Llama-3.1-70B" # the programming model
+inspector_model: "Llama-3.1-70B" # the inspector model
+api_key: '%env:NCHC_KEY%' # Set your API Key here.
+base_url_conv_model: "https://inner-medusa.genai.nchc.org.tw/v1/"
+base_url_programmer: "https://inner-medusa.genai.nchc.org.tw/v1/"
+base_url_inspector: "https://inner-medusa.genai.nchc.org.tw/v1/"
 
 #================================================================================================
 #                                       Config of the system
 #================================================================================================
-project_cache_path : "cache/conv_cache/" # local cache path
-max_attempts : 5 # The max attempts of self-correcting
+project_cache_path: "cache/conv_cache/" # local cache path
+max_attempts: 5 # The max attempts of self-correcting
 max_exe_time: 18000 # max time for the execution
 load_chat: False # whether to load the dialogue from the local cache
 chat_history_path: "" # The path of the chat history, effective if load_chat is True.
 
 #knowledge integration
-retrieval : False # whether to start a knowledge retrieval. If you don't create your knowledge base, you should set it to False
+retrieval: False # whether to start a knowledge retrieval. If you don't create your knowledge base, you should set it to False

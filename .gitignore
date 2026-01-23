@@ -18,3 +18,5 @@ pages/
 dist/
 build/
 app_compile/
+.venv/
+.env
