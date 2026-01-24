@@ -5,7 +5,7 @@ class HuggingFaceDatasetAnalyzer(knw):
     def __init__(self):
         super().__init__()
         self.name = "HF資料集分析器"
-        self.description = "分析 Hugging Face 資料集是否適合繁體中文持續預訓練（Continue Pretrain, CP）用途。載入資料集，分析各欄位的中文字元比例、非空值、字串長度、亂碼檢測，並根據文字長度和品質推薦適合的持續預訓練類型（如短文本理解訓練、長文本建模訓練等）。"
+        self.description = "分析 Hugging Face 資料集 繁體中文 持續預訓練 Continue Pretrain CP 適用性評估 資料集品質檢測 繁簡轉換 亂碼檢測 中文字元統計 OpenCC 語料分析 文本長度統計"
         self.core_function = "analyze_dataset"
         self.mode = 'full'
 

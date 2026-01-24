@@ -19,4 +19,4 @@ load_chat: False # whether to load the dialogue from the local cache
 chat_history_path: "" # The path of the chat history, effective if load_chat is True.
 
 #knowledge integration
-retrieval: False # whether to start a knowledge retrieval. If you don't create your knowledge base, you should set it to False
+retrieval: True # whether to start a knowledge retrieval. If you don't create your knowledge base, you should set it to False
