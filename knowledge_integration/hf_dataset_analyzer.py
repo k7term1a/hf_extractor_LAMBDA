@@ -4,8 +4,8 @@ from .knw import knw
 class HuggingFaceDatasetAnalyzer(knw):
     def __init__(self):
         super().__init__()
-        self.name = "hf_dataset_analyzer"
-        self.description = "Analyze Hugging Face datasets for Traditional Chinese content creation (CP) suitability. Load dataset, analyze fields for Chinese text ratio, empty values, string length, garbled text, and CP usage recommendations."
+        self.name = "HF資料集分析器"
+        self.description = "分析 Hugging Face 資料集是否適合繁體中文持續預訓練（Continue Pretrain, CP）用途。載入資料集，分析各欄位的中文字元比例、非空值、字串長度、亂碼檢測，並根據文字長度和品質推薦適合的持續預訓練類型（如短文本理解訓練、長文本建模訓練等）。"
         self.core_function = "analyze_dataset"
         self.mode = 'full'
 
@@ -83,6 +83,20 @@ class HuggingFaceDatasetAnalyzer(knw):
             
             return False
         
+        def collect_garbled_examples(values, max_examples=3):
+            '''收集包含亂碼的文字範例'''
+            examples = []
+            for v in values:
+                if v is not None and contains_garbled_text(str(v)):
+                    text = str(v)
+                    # 限制每個範例在100字以內
+                    if len(text) > 100:
+                        text = text[:100] + '...'
+                    examples.append(text)
+                    if len(examples) >= max_examples:
+                        break
+            return examples
+        
         def calculate_length_stats(values):
             '''計算字串長度統計'''
             lengths = [len(str(v)) for v in values if v is not None and str(v).strip()]
@@ -96,27 +110,42 @@ class HuggingFaceDatasetAnalyzer(knw):
                 "max": int(np.max(lengths))
             }
         
+        def calculate_tc_char_count(text):
+            '''計算繁體中文字元數量'''
+            if not isinstance(text, str) or len(text) == 0:
+                return 0
+            chinese_chars = len(re.findall(r'[一-鿿]', text))
+            return chinese_chars
+        
+        def calculate_avg_tc_chars(values):
+            '''計算平均繁體中文字元數'''
+            tc_counts = [calculate_tc_char_count(str(v)) for v in values if v is not None]
+            if not tc_counts:
+                return 0
+            return round(np.mean(tc_counts), 2)
+        
         def evaluate_cp_suitability(column_analysis):
-            '''評估是否適合繁中內容創作'''
+            '''評估是否適合繁體中文持續預訓練（Continue Pretrain）'''
             is_tc = column_analysis['is_traditional_chinese']
+            tc_avg_chars = column_analysis['traditional_chinese_avg_chars']
             non_empty = column_analysis['non_empty_ratio']
             has_garbled = column_analysis['contains_garbled_text']
             avg_length = column_analysis['length_stats']['avg']
             
-            # 基本條件：繁體中文、高非空比例、無亂碼
-            if not is_tc or non_empty < 0.7 or has_garbled:
+            # 基本條件：繁體中文、平均字元數足夠、高非空比例、無亂碼
+            if not is_tc or tc_avg_chars < 40 or non_empty < 0.7 or has_garbled:
                 return False, []
             
-            # 根據長度判斷用途
+            # 根據長度推薦持續預訓練類型
             suggestions = []
-            if avg_length < 10:
-                suggestions = ["標題", "標籤"]
-            elif avg_length < 50:
-                suggestions = ["摘要", "引言", "短描述"]
+            if avg_length < 50:
+                suggestions = ["補充訓練", "短文本理解", "對話訓練"]
             elif avg_length < 200:
-                suggestions = ["詳細描述", "段落", "註解"]
+                suggestions = ["標準訓練", "段落理解", "上下文建模"]
+            elif avg_length < 1000:
+                suggestions = ["深度訓練", "長文本建模", "文章理解"]
             else:
-                suggestions = ["完整文章", "故事內容", "長文素材"]
+                suggestions = ["長文本專訓", "長距離依賴", "文檔級理解"]
             
             return True, suggestions
         
@@ -168,8 +197,16 @@ class HuggingFaceDatasetAnalyzer(knw):
                 if tc_count / max(len(text_values[:20]), 1) > 0.8:
                     is_tc = True
                 
+                # 計算平均繁體中文字元數
+                tc_avg_chars = calculate_avg_tc_chars(values)
+                
                 # 檢測亂碼
                 has_garbled = any(contains_garbled_text(str(v)) for v in values[:20])
+                
+                # 收集亂碼範例
+                garbled_examples = []
+                if has_garbled:
+                    garbled_examples = collect_garbled_examples(values, max_examples=3)
                 
                 # 長度統計
                 length_stats = calculate_length_stats(values)
@@ -178,9 +215,11 @@ class HuggingFaceDatasetAnalyzer(knw):
                 column_analysis = {
                     "column": column,
                     "is_traditional_chinese": is_tc,
+                    "traditional_chinese_avg_chars": tc_avg_chars,
                     "non_empty_ratio": round(non_empty_ratio, 3),
                     "length_stats": length_stats,
-                    "contains_garbled_text": has_garbled
+                    "contains_garbled_text": has_garbled,
+                    "garbled_text_examples": garbled_examples
                 }
                 
                 # 評估 CP 適用性
@@ -192,7 +231,53 @@ class HuggingFaceDatasetAnalyzer(knw):
             
             # 輸出結果
             result = {"summary": summary}
-            print("\\n=== 分析結果 ===")
+            
+            # 以表格形式呈現結果
+            print("\\n" + "=" * 120)
+            print("=== 資料集分析結果 ===")
+            print("=" * 120)
+            
+            # 表格標題
+            header = f"{'欄位名稱':<20} {'繁體中文':<10} {'非空比例':<10} {'平均長度':<10} {'亂碼檢測':<10} {'CP適用性':<12} {'CP訓練類型建議':<30}"
+            print(header)
+            print("-" * 125)
+            
+            # 表格內容
+            for item in summary:
+                col_name = item['column'][:18] + '..' if len(item['column']) > 18 else item['column']
+                is_tc = '✓' if item['is_traditional_chinese'] else '✗'
+                non_empty = f"{item['non_empty_ratio']:.2%}"
+                avg_len = f"{item['length_stats']['avg']:.1f}"
+                garbled = '✗ 有亂碼' if item['contains_garbled_text'] else '✓ 正常'
+                cp_rec = '✓ 適合' if item['recommended_for_cp'] else '✗ 不適合'
+                cp_usage = ', '.join(item['cp_usage_suggestions'][:3]) if item['cp_usage_suggestions'] else '-'
+                cp_usage = cp_usage[:28] + '..' if len(cp_usage) > 28 else cp_usage
+                
+                row = f"{col_name:<20} {is_tc:<10} {non_empty:<10} {avg_len:<10} {garbled:<10} {cp_rec:<12} {cp_usage:<30}"
+                print(row)
+            
+            print("=" * 120)
+            
+            # 檢查是否有繁體中文但有亂碼的欄位，印出範例
+            for item in summary:
+                if item['is_traditional_chinese'] and item['contains_garbled_text']:
+                    column = item['column']
+                    print(f"\\n⚠️  警告：欄位 '{column}' 被判定為繁體中文但包含亂碼")
+                    print(f"   以下是該欄位的部分樣本供觀察：")
+                    print("-" * 80)
+                    
+                    # 取得該欄位的值並顯示前5個非空範例
+                    col_values = df[column].tolist()
+                    examples = [str(v) for v in col_values if v is not None and str(v).strip()][:5]
+                    
+                    for i, example in enumerate(examples, 1):
+                        # 截斷過長的文字
+                        display_text = example[:200] + '...' if len(example) > 200 else example
+                        print(f"   範例 {i}: {display_text}")
+                    print("-" * 80)
+            
+            # 輸出完整 JSON 結果
+            print("\\n=== 完整 JSON 結果 ===")
             print(json.dumps(result, ensure_ascii=False, indent=2))
             
             return result

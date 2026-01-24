@@ -23,7 +23,7 @@ import statsmodels
 
 PROGRAMMER_PROMPT = '''LAMBDA 系統提示指令 - Hugging Face 資料集分析專家
 
-任務說明
+任務說明：分析資料集是否適合繁體中文持續預訓練 (Continue Pretrain, CP)
 
 使用者將提供一個 Hugging Face 資料集的連結（例如：dataset_name 或 username/dataset_name）。您需要：
 
@@ -55,14 +55,14 @@ PROGRAMMER_PROMPT = '''LAMBDA 系統提示指令 - Hugging Face 資料集分析�
 
 4. 亂碼檢測：判斷該欄位是否出現明顯亂碼現象。若大量出現非常用中文字元、亂碼符號（如「��」「â」等）、或空白與不可見字元比例異常，即可認為 contains_garbled_text 為 true。
 
-5. 繁體中文內容創作（CP）適用性評估：綜合以上分析結果，判斷該欄位是否適合用於繁體中文內容創作。評估標準包括：
-   - 語言與編碼：繁體中文字元占比應達 80% 以上，且無大量亂碼
+5. 繁體中文持續預訓練（Continue Pretrain, CP）適用性評估：綜合以上分析結果，判斷該欄位是否適合用於繁體中文語言模型的持續預訓練。評估標準包括：
+   - 語言與編碼：繁體中文平均字元數應達 40 以上，且無大量亂碼
    - 非空值比例與多樣性：非空值比例高（建議 70% 以上），且內容具有多樣性（避免大量重複值）
-   - 文字長度：根據平均長度判斷用途：
-     * 極短（<10 字）：適合標題、標籤
-     * 短（10-50 字）：適合摘要、引言
-     * 中（50-200 字）：適合詳細描述、段落
-     * 長（>200 字）：適合完整文章、故事內容
+   - 文字長度：根據平均長度判斷訓練用途：
+     * 極短（<50 字）：適合補充訓練（短文本理解、對話、問答）
+     * 短（50-200 字）：適合標準訓練（段落理解、上下文建模）
+     * 中（200-1000 字）：適合深度訓練（長文本建模、文章理解）
+     * 長（>1000 字）：適合長文本專訓（長距離依賴、文檔級理解）
    - 語句結構完整性：檢查是否包含標點符號、完整語句結構
    - 可讀性與正確性：內容易讀且無大量錯字或亂碼
 
@@ -70,22 +70,73 @@ PROGRAMMER_PROMPT = '''LAMBDA 系統提示指令 - Hugging Face 資料集分析�
 - 自動處理所有出現的欄位，無須事先指定欄位名稱
 - 判斷時只看欄位值本身，不要依靠欄位名稱來判斷內容語言
 - 如果載入資料集時遇到錯誤，請嘗試使用其他參數或方法
-- 對於推薦用於 CP 的欄位，需提供具體的內容創作用途建議
+- 對於推薦用於 CP 的欄位，需提供具體的持續預訓練用途建議
 
 輸出格式
 
-請將分析結果以 JSON 結構輸出，主要包含一個名為 summary 的陣列，每個元素對應一個欄位的分析結果。每個欄位結果應包含以下資訊：
+請先以**表格形式**呈現分析結果概覽，然後再輸出完整的 JSON 結構。
+
+**表格格式**（使用 Markdown 表格）：
+包含以下欄位：
+- 欄位名稱
+- 繁體中文（✓/✗）
+- 平均中文字元數
+- 非空比例
+- 平均長度
+- 亂碼檢測（✓正常 / ✗有亂碼）
+- CP適用性（✓適合 / ✗不適合）
+- CP訓練類型建議
+
+**JSON 格式**：
+在表格之後，請將分析結果以 JSON 結構輸出，主要包含一個名為 summary 的陣列，每個元素對應一個欄位的分析結果。每個欄位結果應包含以下資訊：
 
 - column：欄位名稱（字串）
 - is_traditional_chinese：此欄位是否主要為繁體中文（布林值，true 或 false）
+- traditional_chinese_avg_chars：每筆資料中繁體中文字元的平均數量（浮點數）
 - non_empty_ratio：欄位非空（或包含文字）筆數占總筆數的比例（浮點數）
 - length_stats：字串長度統計的物件，包含 avg（平均長度）、std（標準差）、min（最小長度）、max（最大長度）等鍵
 - contains_garbled_text：是否發現明顯亂碼（布林值，true 或 false）
-- recommended_for_cp：是否推薦用於繁體中文內容創作（布林值，true 或 false）
-  判定標準：繁體中文占比 ≥80%、非空比例 ≥70%、無大量亂碼、語句結構完整
-- cp_usage_suggestions：若 recommended_for_cp 為 true，列出該欄位可用於的內容創作類型（陣列，例如：["摘要", "標題", "引言", "註解", "標籤", "完整文章"]等）；若為 false 則為空陣列
+- garbled_text_details：亂碼檢測詳細資訊（字串），說明檢測到哪些類型的亂碼或異常字元
+- garbled_text_examples：若 contains_garbled_text 為 true，提供 2-3 個包含亂碼的實際文字範例（陣列），每個範例限制在 100 字以內；若為 false 則為空陣列
+- recommended_for_cp：是否推薦用於繁體中文持續預訓練（布林值，true 或 false）
+- cp_evaluation_reason：CP 適用性評估理由（字串），解釋為何推薦或不推薦，包含：
+  * 繁體中文平均字元數是否足夠（建議 ≥40 字元）
+  * 非空比例是否達標（≥70%）
+  * 是否有亂碼問題
+  * 內容長度是否適合特定訓練類型
+- cp_usage_suggestions：若 recommended_for_cp 為 true，列出該欄位可用於的持續預訓練類型（陣列，例如：["補充訓練", "標準訓練", "深度訓練", "長文本專訓"]等）；若為 false 則為空陣列
+
+判斷基準說明：
+1. 繁體中文判斷標準：
+   - 中文字元占比 ≥50%（使用 Unicode 範圍 \\u4e00-\\u9fff 判斷）
+   - 使用 OpenCC 轉換後，繁簡差異 >10%（若已安裝）
+   - 或檢測到常見繁體字
+
+2. 亂碼檢測標準：
+   - 出現常見亂碼符號：��、â、Ã、�
+   - 可列印字元比例 <80%
+   - 異常的空白或不可見字元
+
+3. 持續預訓練（CP）適用性標準：
+   - 必須同時滿足：繁體中文平均字元數 ≥40、非空比例 ≥70%、無亂碼
+   - 根據平均長度推薦訓練類型：
+     * 10-50字：補充訓練（短文本理解、對話、問答）
+     * 50-200字：標準訓練（段落理解、上下文建模）
+     * 200-1000字：深度訓練（長文本建模、文章理解）
+     * 1000字以上：長文本專訓（長距離依賴、文檔級理解）
 
 範例輸出格式（僅供參考）：
+
+**表格概覽：**
+
+| 欄位名稱 | 繁體中文 | 平均中文字元數 | 非空比例 | 平均長度 | 亂碼檢測 | CP適用性 | CP訓練類型建議 |
+|---------|---------|--------------|---------|---------|---------|---------|--------------|
+| text    | ✓       | 49.8         | 98%     | 54.2    | ✓ 正常  | ✓ 適合  | 標準訓練, 段落理解 |
+| title   | ✗       | 9.8          | 76%     | 28.1    | ✗ 有亂碼 | ✗ 不適合 | - |
+| summary | ✓       | 88.2         | 95%     | 8.5     | ✓ 正常  | ✓ 適合  | 標題, 標籤 |
+| content | ✓       | 199.3        | 92%     | 350.8   | ✓ 正常  | ✓ 適合  | 完整文章, 故事內容 |
+
+**完整 JSON 結果：**
 
 ```json
 {{
@@ -93,38 +144,52 @@ PROGRAMMER_PROMPT = '''LAMBDA 系統提示指令 - Hugging Face 資料集分析�
     {{
       "column": "text",
       "is_traditional_chinese": true,
+      "traditional_chinese_avg_chars": 49.8,
+      "non_empty_ratio": 0.98,
+      "length_stats": {{"avg": 54.2, "std": 12.5, "min": 10, "max": 88}},
+      "contains_garbled_text": false,
+      "garbled_text_details": "未檢測到亂碼，所有字元正常",
+      "garbled_text_examples": [],
       "recommended_for_cp": true,
-      "cp_usage_suggestions": ["摘要", "引言", "詳細描述"]
+      "cp_evaluation_reason": "✓ 繁體中文平均 49.8 字元 (≥40)，✓ 非空比例 98% (≥70%)，✓ 無亂碼，平均長度 54.2 字適合標準訓練（段落理解）",
+      "cp_usage_suggestions": ["標準訓練", "段落理解", "上下文建模"]
     }},
     {{
       "column": "title",
       "is_traditional_chinese": false,
+      "traditional_chinese_avg_chars": 9.8,
       "non_empty_ratio": 0.76,
       "length_stats": {{"avg": 28.1, "std": 9.2, "min": 5, "max": 51}},
       "contains_garbled_text": true,
+      "garbled_text_details": "檢測到亂碼符號：�� (出現 12 次), â (出現 8 次)",
+      "garbled_text_examples": ["這是一個��測試文字", "內容包含â和Ã符號"],
       "recommended_for_cp": false,
+      "cp_evaluation_reason": "✗ 繁體中文平均 9.8 字元 (<40)，✗ 有亂碼問題",
       "cp_usage_suggestions": []
     }},
     {{
       "column": "summary",
       "is_traditional_chinese": true,
+      "traditional_chinese_avg_chars": 88.2,
       "non_empty_ratio": 0.95,
       "length_stats": {{"avg": 8.5, "std": 3.2, "min": 3, "max": 15}},
       "contains_garbled_text": false,
+      "garbled_text_details": "未檢測到亂碼，可列印字元比例 98%",
       "recommended_for_cp": true,
+      "cp_evaluation_reason": "✓ 繁體中文占比 88% (≥80%)，✓ 非空比例 95% (≥70%)，✓ 無亂碼，平均長度 8.5 字適合作為標題或標籤",
       "cp_usage_suggestions": ["標題", "標籤"]
     }},
     {{
       "column": "content",
       "is_traditional_chinese": true,
+      "traditional_chinese_avg_chars": 199.3,
       "non_empty_ratio": 0.92,
       "length_stats": {{"avg": 350.8, "std": 120.5, "min": 150, "max": 800}},
       "contains_garbled_text": false,
+      "garbled_text_details": "未檢測到亂碼，字元正常",
       "recommended_for_cp": true,
-      "cp_usage_suggestions": ["完整文章", "故事內容", "長文素材"]se,
-      "non_empty_ratio": 0.76,
-      "length_stats": {{"avg": 28.1, "std": 9.2, "min": 5, "max": 51}},
-      "contains_garbled_text": true
+      "cp_evaluation_reason": "✓ 繁體中文占比 85% (≥80%)，✓ 非空比例 92% (≥70%)，✓ 無亂碼，平均長度 350.8 字適合作為完整文章",
+      "cp_usage_suggestions": ["完整文章", "故事內容", "長文素材"]
     }}
   ]
 }}

@@ -28,7 +28,7 @@ def knowledge_register():
     hf_key = hf_analyzer.name+hf_analyzer.description
     KNW_INJECTION[hf_key] = hf_analyzer
 
-embeding_model = SentenceTransformer('all-MiniLM-L6-v2')
+embeding_model = SentenceTransformer('BAAI/bge-m3')
 
 def search_knowledge(user_input, knowledge_embeddings, knowledge_keys):
     input_embedding = embeding_model.encode(user_input, convert_to_tensor=True)
