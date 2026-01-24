@@ -66,19 +66,21 @@ class HuggingFaceDatasetAnalyzer(knw):
             return traditional_count > 0
         
         def contains_garbled_text(text):
-            '''檢測亂碼'''
+            '''檢測亂碼符號'''
             if not isinstance(text, str):
                 return False
             
-            # 檢查常見亂碼符號
+            # 檢查亂碼符號
             garbled_patterns = ['��', 'â', 'Ã', '�']
-            for pattern in garbled_patterns:
-                if pattern in text:
-                    return True
+            garbled_count = sum(text.count(pattern) for pattern in garbled_patterns)
             
-            # 檢查異常字符比例
+            # 如果亂碼符號占比很高，判定為亂碼
+            if len(text) > 0 and garbled_count / len(text) > 0.3:
+                return True
+            
+            # 檢查可列印字符比例
             printable = sum(1 for c in text if c.isprintable() or c in '\\n\\r\\t')
-            if len(text) > 0 and printable / len(text) < 0.8:
+            if len(text) > 0 and printable / len(text) < 0.5:
                 return True
             
             return False
@@ -177,6 +179,28 @@ class HuggingFaceDatasetAnalyzer(knw):
             df = pd.DataFrame(dataset)
             print(f"\\n資料集包含 {len(df)} 筆資料")
             print(f"欄位：{list(df.columns)}\\n")
+            
+            # 顯示每個欄位的樣本
+            print("\\n=== 欄位樣本預覽 ===")
+            for column in df.columns:
+                print(f"\\n【欄位：{column}】")
+                samples = df[column].dropna().head(3).tolist()
+                for i, sample in enumerate(samples, 1):
+                    display_text = str(sample)[:200] + '...' if len(str(sample)) > 200 else str(sample)
+                    print(f"  樣本 {i}: {display_text}")
+            print("=" * 80)
+            
+            # 觸發語意品質檢查（針對所有文字欄位）
+            print("\\n開始進行語意品質檢查...")
+            for column in df.columns:
+                # 檢查是否為文字類型欄位
+                sample_value = df[column].dropna().head(1).tolist()
+                if sample_value and isinstance(sample_value[0], str):
+                    samples = df[column].dropna().head(3).tolist()
+                    error_msg = f"SEMANTIC_CHECK_REQUEST\\n欄位名稱：{column}\\n"
+                    for i, sample in enumerate(samples, 1):
+                        error_msg += f"樣本{i}：{sample}\\n"
+                    raise ValueError(error_msg)
             
             # 分析每個欄位
             summary = []
