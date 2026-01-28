@@ -149,6 +149,7 @@ class HuggingFaceDatasetAnalyzer(knw):
             - num_samples: 要儲存的樣本數量，None 表示全部
             '''
             # 創建輸出目錄
+            output_dir = "./output"
             os.makedirs(output_dir, exist_ok=True)
             
             # 清理資料集名稱用於檔案命名

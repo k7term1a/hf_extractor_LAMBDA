@@ -90,7 +90,7 @@ for field in text_columns:
 
 1. **對於被認可的欄位（適合繁體中文 CP）**：
    - 使用知識庫中的 `save_approved_fields_to_parquet()` 函數
-   - 將該欄位的資料儲存為 parquet 檔案
+   - 將該欄位的資料儲存為 `./output` 下面的 parquet 檔案
    - Schema: {{"id": 序號, "text": 欄位內容}}
    - 檔案命名：`{{dataset_name}}_{{field_name}}_cp_data.parquet`
 
