@@ -39,16 +39,73 @@ class HuggingFaceDatasetAnalyzer(knw):
             if hf_token:
                 load_kwargs['token'] = hf_token
             
-            # 載入資料集
+            from datasets import get_dataset_config_names, get_dataset_split_names
+            
+            dataset = None
+            subset_name = None
+            target_split = split
+            
+            # 先檢查是否有 subset (config)
             try:
-                dataset = load_dataset(dataset_name, split=f"{split}[:{num_samples}]", **load_kwargs)
+                config_names = get_dataset_config_names(dataset_name, **load_kwargs)
+                
+                if config_names and len(config_names) > 0:
+                    # 有 subset，需要選擇合適的 subset 和 split
+                    print(f"找到 {len(config_names)} 個 subset: {config_names}")
+                    
+                    valid_subset_found = False
+                    for config in config_names:
+                        try:
+                            # 獲取該 subset 的所有可用 split
+                            available_splits = get_dataset_split_names(dataset_name, config, **load_kwargs)
+                            print(f"  subset '{config}' 可用的 split: {available_splits}")
+                            
+                            # 優先使用指定的 split，如果不存在則使用第一個可用的 split
+                            if split in available_splits:
+                                target_split = split
+                            elif available_splits and len(available_splits) > 0:
+                                target_split = available_splits[0]
+                                print(f"  指定的 split '{split}' 不存在，改用 '{target_split}'")
+                            else:
+                                print(f"  subset '{config}' 沒有可用的 split，跳過")
+                                continue
+                            
+                            # 嘗試載入該 subset 和 split（先載入少量資料檢查）
+                            print(f"  嘗試載入 subset: {config}, split: {target_split}")
+                            test_dataset = load_dataset(dataset_name, config, split=f"{target_split}[:10]", **load_kwargs)
+                            
+                            # 檢查是否有資料
+                            if len(test_dataset) > 0:
+                                subset_name = config
+                                # 載入實際需要的樣本數
+                                dataset = load_dataset(dataset_name, config, split=f"{target_split}[:{num_samples}]", **load_kwargs)
+                                print(f"✓ 成功載入 subset: {subset_name}, split: {target_split}")
+                                valid_subset_found = True
+                                break
+                            else:
+                                print(f"  subset '{config}' 的 split '{target_split}' 為空，跳過")
+                        except Exception as e_sub:
+                            print(f"  無法載入 subset '{config}': {e_sub}")
+                            continue
+                    
+                    if not valid_subset_found:
+                        raise ValueError("找不到有效的 subset 和 split 組合")
+                        
+                else:
+                    # 沒有 subset，直接載入
+                    print("此資料集沒有 subset")
+                    dataset = load_dataset(dataset_name, split=f"{split}[:{num_samples}]", **load_kwargs)
+                    
+            except ValueError as ve:
+                # 重新拋出我們自己定義的錯誤
+                raise ve
             except Exception as e:
-                print(f"載入失敗，嘗試其他方式：{e}")
+                # 無法獲取 config 資訊，可能是簡單資料集，直接嘗試載入
+                print(f"無法獲取 config 資訊，嘗試直接載入: {e}")
                 try:
-                    dataset = load_dataset(dataset_name, split=split, **load_kwargs)
-                    dataset = dataset.select(range(min(num_samples, len(dataset))))
+                    dataset = load_dataset(dataset_name, split=f"{split}[:{num_samples}]", **load_kwargs)
                 except Exception as e2:
-                    print(f"仍然失敗：{e2}")
+                    print(f"直接載入失敗: {e2}")
                     print("提示：如需存取私有或需登入的資料集，請確保：")
                     print("1. 已設置 HF_KEY 環境變數")
                     print("2. 或使用 huggingface-cli login 登入")
@@ -56,7 +113,13 @@ class HuggingFaceDatasetAnalyzer(knw):
             
             # 轉換為 DataFrame
             df = pd.DataFrame(dataset)
-            print(f"\\n資料集包含 {len(df)} 筆資料")
+            
+            # 顯示資料集資訊
+            if subset_name:
+                print(f"\\n資料集：{dataset_name} (subset: {subset_name})")
+            else:
+                print(f"\\n資料集：{dataset_name}")
+            print(f"資料筆數：{len(df)}")
             print(f"欄位：{list(df.columns)}\\n")
             
             # 顯示每個欄位的樣本
@@ -66,9 +129,9 @@ class HuggingFaceDatasetAnalyzer(knw):
                 samples = df[column].dropna().head(5).tolist()
                 for i, sample in enumerate(samples, 1):
                     display_text = str(sample)
-                    # 如果樣本過長，只顯示前500字符
-                    if len(display_text) > 500:
-                        display_text = display_text[:500] + '... (已截斷)'
+                    # 如果樣本過長，只顯示前200字符
+                    if len(display_text) > 200:
+                        display_text = display_text[:200] + '... (已截斷)'
                     print(f"  樣本 {i}: {display_text}")
             print("=" * 80)
             

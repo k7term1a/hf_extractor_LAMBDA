@@ -26,7 +26,14 @@ class Inspector:
         try:
             return self.client.chat.completions.create(**params)
         except Exception as e:
-            print(f"Error calling chat model: {e}")
+            print("\n" + "="*80)
+            print("❌ Inspector API 呼叫失敗")
+            print("="*80)
+            print(f"錯誤類型: {type(e).__name__}")
+            print(f"錯誤訊息: {e}")
+            print(f"模型: {self.model}")
+            print(f"訊息數量: {len(self.messages)}")
+            print("="*80 + "\n")
             return None
 
     def clear(self):

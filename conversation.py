@@ -203,15 +203,38 @@ class Conversation:
                     yield from self._handle_execution_result(exe_res, msg_llm, chat_history_display)
                 else:
                     self.error_count += 1
+                    # 輸出錯誤詳情到 terminal
+                    print("\n" + "="*80)
+                    print("❌ Programmer 程式執行失敗")
+                    print("="*80)
+                    print(f"錯誤類型: {sign}")
+                    print(f"錯誤訊息:\n{msg_llm}")
+                    print(f"\n失敗的程式碼:\n{'-'*80}")
+                    print(code)
+                    print("-"*80)
+                    print(f"嘗試修復次數: {self.error_count}")
+                    print("="*80 + "\n")
+                    
                     round = 0
                     while 'error' in sign and round < self.max_attempts:
-                        chat_history_display[-1][1] = f'⭕ Execution error, try to repair the code, attempts: {round + 1}....\n'
+                        if "ValueError: SEMANTIC_CHECK_REQUEST" in msg_llm:
+                            chat_history_display[-1][1] = f'🤖 Semantic checking...'
+                        else:
+                            chat_history_display[-1][1] = f'⭕ Execution error, try to repair the code, attempts: {round + 1}....\n'
                         yield chat_history_display
                         self.add_inspector_msg(code, msg_llm)
+                        print(f"\n🔍 Inspector 檢查中... (第 {round + 1} 次嘗試)")
                         if round == 3:
                             insp_response = "Try other packages or methods."
+                            print("⚠️  已達最大嘗試次數，建議嘗試其他方法")
                         else:
-                            insp_response = self.inspector._call_chat_model().choices[0].message.content
+                            inspector_result = self.inspector._call_chat_model()
+                            if inspector_result:
+                                insp_response = inspector_result.choices[0].message.content
+                                print(f"✓ Inspector 回應:\n{insp_response[:200]}..." if len(insp_response) > 200 else f"✓ Inspector 回應:\n{insp_response}")
+                            else:
+                                insp_response = "Inspector API 呼叫失敗，請檢查網路或 API 設定"
+                                print("❌ Inspector 無法提供回應")
                         self.inspector.messages.append({"role": "assistant", "content": insp_response})
 
                         self.add_programmer_repair_msg(code, msg_llm, insp_response)
@@ -228,10 +251,23 @@ class Conversation:
                             sign, msg_llm, exe_res = self.run_code(code)
                             if sign and 'error' not in sign:
                                 self.repair_count += 1
+                                print("\n" + "="*80)
+                                print(f"✅ 程式碼修復成功！(第 {round + 1} 次嘗試)")
+                                print("="*80 + "\n")
                                 break
+                            else:
+                                print(f"\n⚠️  第 {round + 1} 次修復失敗，繼續嘗試...\n")
                         round += 1
 
                     if round == self.max_attempts:
+                        print("\n" + "="*80)
+                        print(f"❌ 程式碼修復失敗 - 已達最大嘗試次數 ({self.max_attempts})")
+                        print("="*80)
+                        print("建議：")
+                        print("  1. 檢查資料集名稱是否正確")
+                        print("  2. 檢查網路連線和 HuggingFace token")
+                        print("  3. 手動修改程式碼或提供更多資訊")
+                        print("="*80 + "\n")
                         return prog_response + f"\nSorry, I can't fix the code with {self.max_attempts} attempts, can you help me to modified it or give some suggestions?"
 
                     yield from self._handle_execution_result(exe_res, msg_llm, chat_history_display)

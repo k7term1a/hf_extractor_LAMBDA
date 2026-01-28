@@ -42,7 +42,17 @@ class Programmer:
             print(f"======Prompt Tokens: {usage.prompt_tokens}======Completion Tokens: {usage.completion_tokens}=======Total Tokens: {usage.total_tokens}")
             return response
         except Exception as e:
-            print(f"Error calling chat model: {e}")
+            print("\n" + "="*80)
+            print("❌ Programmer API 呼叫失敗")
+            print("="*80)
+            print(f"錯誤類型: {type(e).__name__}")
+            print(f"錯誤訊息: {e}")
+            print(f"模型: {self.model}")
+            print(f"訊息數量: {len(self.messages)}")
+            if self.last_snaps:
+                print(f"已檢索知識: 是")
+            print("="*80 + "\n")
+            traceback.print_exc()
             return None
 
     def _call_chat_model_streaming(self, functions=None, include_functions=False, retrieval=False, kernel=None):
@@ -78,7 +88,16 @@ class Programmer:
                     chunk_message = chunk.choices[0].delta.content
                     yield chunk_message
         except Exception as e:
-            print(f"Error calling chat model: {e}")
+            print("\n" + "="*80)
+            print("❌ Programmer API 串流呼叫失敗")
+            print("="*80)
+            print(f"錯誤類型: {type(e).__name__}")
+            print(f"錯誤訊息: {e}")
+            print(f"模型: {self.model}")
+            print(f"訊息數量: {len(self.messages)}")
+            if self.last_snaps:
+                print(f"已檢索知識: 是")
+            print("="*80 + "\n")
             traceback.print_exc()
             return None
 
