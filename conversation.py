@@ -218,7 +218,7 @@ class Conversation:
                     round = 0
                     while 'error' in sign and round < self.max_attempts:
                         if "ValueError: SEMANTIC_CHECK_REQUEST" in msg_llm:
-                            chat_history_display[-1][1] = f'🤖 Semantic checking...'
+                            chat_history_display[-1][1] = f'🤖 Semantic checking...\n'
                         else:
                             chat_history_display[-1][1] = f'⭕ Execution error, try to repair the code, attempts: {round + 1}....\n'
                         yield chat_history_display
