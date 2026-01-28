@@ -14,7 +14,7 @@
 
 ## 📺 系統示範(已加速)
 
-https://github.com/user-attachments/assets/demo.mp4
+![Demo of the application](demo.gif)
 
 > 完整示範影片展示了從輸入資料集名稱到自動分析並儲存的完整流程
 
